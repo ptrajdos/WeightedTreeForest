@@ -9,8 +9,8 @@ class TreeWeightCalculator(ABC):
     """Interface for objects that turn attribute weights into tree weights.
 
     Implementations receive a fitted forest, the samples being predicted and a
-    vector of attribute (feature) weights, and return one non-negative weight
-    per sample and tree in ``forest.estimators_``.
+    vector of attribute (feature) weights, and return one weight per sample and
+    tree in ``forest.estimators_``. All weights lie in the [0, 1] interval.
     """
 
     @abstractmethod
@@ -24,12 +24,12 @@ class TreeWeightCalculator(ABC):
         X : array-like of shape (n_samples, n_features)
             Samples being predicted.
         attribute_weights : ndarray of shape (n_features,)
-            Weight of each attribute.
+            Weight of each attribute, in [0, 1].
 
         Returns
         -------
         tree_weights : ndarray of shape (n_samples, n_estimators)
-            Non-negative weight of each tree for each sample.
+            Weight of each tree for each sample, in [0, 1].
         """
 
     def __call__(self, forest, X, attribute_weights):
@@ -39,6 +39,8 @@ class TreeWeightCalculator(ABC):
                 f"attribute_weights must have shape ({forest.n_features_in_},), "
                 f"got {attribute_weights.shape}."
             )
+        if np.any((attribute_weights < 0) | (attribute_weights > 1)):
+            raise ValueError("attribute_weights must lie in the [0, 1] interval.")
 
         tree_weights = np.asarray(
             self.calculate_tree_weights(forest, X, attribute_weights), dtype=float
@@ -49,8 +51,8 @@ class TreeWeightCalculator(ABC):
                 f"Tree weights must have shape {expected_shape}, "
                 f"got {tree_weights.shape}."
             )
-        if np.any(tree_weights < 0):
-            raise ValueError("Tree weights must be non-negative.")
+        if np.any((tree_weights < 0) | (tree_weights > 1)):
+            raise ValueError("Tree weights must lie in the [0, 1] interval.")
         return tree_weights
 
 
@@ -112,10 +114,6 @@ class _DecisionPathMeanTreeWeightCalculator(TreeWeightCalculator):
             )
         return mean, has_internal_nodes
 
-    def _check_non_negative(self, attribute_weights):
-        if np.any(attribute_weights < 0):
-            raise ValueError("attribute_weights must be non-negative.")
-
 
 class DecisionPathTreeWeightCalculator(_DecisionPathMeanTreeWeightCalculator):
     """Weights each tree by the attribute weights along a sample's decision path.
@@ -127,7 +125,6 @@ class DecisionPathTreeWeightCalculator(_DecisionPathMeanTreeWeightCalculator):
     """
 
     def calculate_tree_weights(self, forest, X, attribute_weights):
-        self._check_non_negative(attribute_weights)
         with np.errstate(divide="ignore"):
             log_weights = np.log(attribute_weights)
         mean_log_weight, _ = self._path_means(forest, X, log_weights)
@@ -144,6 +141,5 @@ class DecisionPathArithmeticMeanTreeWeightCalculator(_DecisionPathMeanTreeWeight
     """
 
     def calculate_tree_weights(self, forest, X, attribute_weights):
-        self._check_non_negative(attribute_weights)
         mean_weight, has_internal_nodes = self._path_means(forest, X, attribute_weights)
         return np.where(has_internal_nodes, mean_weight, 1.0)

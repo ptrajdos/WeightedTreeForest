@@ -44,7 +44,7 @@ class DecisionPathTreeWeightCalculatorTest(unittest.TestCase):
         for name, (X, y, forest_class) in get_datasets().items():
             with self.subTest(dataset=name):
                 forest = self.fit(X, y, forest_class, max_depth=5)
-                attribute_weights = self.rng.uniform(0.1, 2.0, X.shape[1])
+                attribute_weights = self.rng.uniform(0.1, 1.0, X.shape[1])
                 tree_weights = self.calculator(forest, X, attribute_weights)
                 self.assertEqual(tree_weights.shape, (len(X), N_ESTIMATORS))
                 np.testing.assert_allclose(
@@ -56,7 +56,7 @@ class DecisionPathTreeWeightCalculatorTest(unittest.TestCase):
         for name, (X, y, forest_class) in get_datasets().items():
             with self.subTest(dataset=name):
                 forest = self.fit(X, y, forest_class, max_depth=1)
-                attribute_weights = self.rng.uniform(0.1, 2.0, X.shape[1])
+                attribute_weights = self.rng.uniform(0.1, 1.0, X.shape[1])
                 root_features = [tree.tree_.feature[0] for tree in forest.estimators_]
                 np.testing.assert_allclose(
                     self.calculator(forest, X, attribute_weights),
@@ -67,7 +67,7 @@ class DecisionPathTreeWeightCalculatorTest(unittest.TestCase):
         for name, (X, y, forest_class) in get_datasets().items():
             with self.subTest(dataset=name):
                 forest = self.fit(X, y, forest_class, max_depth=5)
-                attribute_weights = self.rng.uniform(0.1, 2.0, X.shape[1])
+                attribute_weights = self.rng.uniform(0.1, 1.0, X.shape[1])
                 attribute_weights[0] = 0.0
                 tree_weights = self.calculator(forest, X, attribute_weights)
                 for t, tree in enumerate(forest.estimators_):
@@ -77,20 +77,21 @@ class DecisionPathTreeWeightCalculatorTest(unittest.TestCase):
 
     def test_scaling_attribute_weights_scales_tree_weights(self):
         # The geometric mean is homogeneous: scaling all inputs scales the mean.
+        # Scaling down keeps the weights in [0, 1].
         for name, (X, y, forest_class) in get_datasets().items():
             with self.subTest(dataset=name):
                 forest = self.fit(X, y, forest_class, max_depth=5)
-                attribute_weights = self.rng.uniform(0.1, 2.0, X.shape[1])
+                attribute_weights = self.rng.uniform(0.1, 1.0, X.shape[1])
                 np.testing.assert_allclose(
-                    self.calculator(forest, X, 3.0 * attribute_weights),
-                    3.0 * self.calculator(forest, X, attribute_weights),
+                    self.calculator(forest, X, 0.5 * attribute_weights),
+                    0.5 * self.calculator(forest, X, attribute_weights),
                 )
 
     def test_single_leaf_tree_has_weight_one(self):
         X = self.rng.normal(size=(20, 3))
         forest = self.fit(X, np.ones(20), RandomForestRegressor)
         np.testing.assert_array_equal(
-            self.calculator(forest, X, np.array([0.0, 2.0, 3.0])),
+            self.calculator(forest, X, np.array([0.0, 0.5, 1.0])),
             np.ones((20, N_ESTIMATORS)),
         )
 
@@ -99,6 +100,7 @@ class DecisionPathTreeWeightCalculatorTest(unittest.TestCase):
         forest = self.fit(X, y, forest_class)
         for name, attribute_weights in {
             "negative": np.array([-1.0, 1.0, 1.0, 1.0]),
+            "above_one": np.array([0.5, 1.5, 1.0, 1.0]),
             "wrong_length": np.ones(X.shape[1] + 1),
         }.items():
             with self.subTest(case=name):
@@ -121,7 +123,7 @@ class DecisionPathWeightedPredictionTest(unittest.TestCase):
                     max_depth=5,
                     tree_weight_calculator=DecisionPathTreeWeightCalculator(),
                 ).fit(X, y)
-                attribute_weights = rng.uniform(0.1, 2.0, X.shape[1])
+                attribute_weights = rng.uniform(0.1, 1.0, X.shape[1])
                 tree_weights = reference_tree_weights(estimator, X, attribute_weights)
                 X32 = X.astype(np.float32)
 

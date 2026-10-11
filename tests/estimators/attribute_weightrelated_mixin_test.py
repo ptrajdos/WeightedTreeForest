@@ -251,9 +251,9 @@ class WeightedPredictionTest(unittest.TestCase):
         zeroes most tree weights; those cases are kept few and separate.
         """
         for repetition in range(5):
-            yield f"positive_{repetition}", rng.uniform(0.1, 2.0, n_features)
+            yield f"positive_{repetition}", rng.uniform(0.1, 1.0, n_features)
         for repetition in range(3):
-            attribute_weights = rng.uniform(0.1, 2.0, n_features)
+            attribute_weights = rng.uniform(0.1, 1.0, n_features)
             attribute_weights[rng.integers(n_features)] = 0.0
             yield f"one_zero_{repetition}", attribute_weights
 
