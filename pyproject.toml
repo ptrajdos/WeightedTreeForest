@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=77.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "weighted_tree_forest"
+dynamic = ["version", "readme"]
+dependencies = [
+    'scikit-learn>=1.6.0',
+]
+requires-python = ">=3.10"
+authors = [
+  {name = "Pawel Trajdos", email = "pawel.trajdos@pwr.edu.pl"},
+]
+maintainers = [
+  {name = "Pawel Trajdos", email = "pawel.trajdos@pwr.edu.pl"}
+]
+description = "Random forest ensembles with weighted trees, compatible with scikit-learn"
+
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
+keywords = ["machine learning", "ensemble", "random forest", "decision trees", "scikit-learn"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "weighted_tree_forest.__version__"}  # any module attribute compatible with ast.literal_eval
+readme = {file = ["README.md"], content-type = "text/markdown"}
+
+[project.urls]
+Repository = "https://github.com/ptrajdos/WeightedTreeForest.git"
+
+[tool.setuptools]
+packages = { find = { include = ["weighted_tree_forest", "weighted_tree_forest.*"] } }
+
+[project.optional-dependencies]
+
+test = [
+    'coverage>=7.8.0, <8.0.0',
+    'unittest-parallel>=1.5.3, <2.0.0',
+    'pandas>=2.0.0, <3.0.0',
+    'pdoc3>=0.11.1, <0.12.0',
+    'pytest>=8.3.5, <9.0.0',
+    'pytest-cov>=6.1.1, <7.0.0',
+    'pytest-profiling>=1.8.1, <2.0.0',
+    'pytest-xdist>=3.6.1, <4.0.0',
+    'snakeviz>=2.2.2, <3.0.0',
+    'pytest-timer>=1.0.0, <2.0.0',
+    'tox>=4.0.0, <5.0.0',
+]
