@@ -1,7 +1,8 @@
+import inspect
 import unittest
 import numpy as np
 from sklearn.datasets import load_diabetes, load_iris
-from sklearn.utils.estimator_checks import check_estimator
+from weighted_tree_forest.compat.sklearn_compat import check_estimator_compat
 from weighted_tree_forest.estimators.attribute_weightrelated_mixin import AttributeWeightRelatedForestMixin
 from weighted_tree_forest.estimators.tree_weight_calculator import (
     DecisionPathArithmeticMeanTreeWeightCalculator,
@@ -17,99 +18,40 @@ class AwRFCclass(AttributeWeightRelatedForestMixin, RandomForestClassifier):
 class AWRfRegressor(AttributeWeightRelatedForestMixin, RandomForestRegressor):
     pass
 
-class AwRFCclassWithCalculator(AttributeWeightRelatedForestMixin, RandomForestClassifier):
-    def __init__(
-        self,
-        n_estimators=100,
-        *,
-        tree_weight_calculator=None,
-        criterion="gini",
-        max_depth=None,
-        min_samples_split=2,
-        min_samples_leaf=1,
-        min_weight_fraction_leaf=0.0,
-        max_features="sqrt",
-        max_leaf_nodes=None,
-        min_impurity_decrease=0.0,
-        bootstrap=True,
-        oob_score=False,
-        n_jobs=None,
-        random_state=None,
-        verbose=0,
-        warm_start=False,
-        class_weight=None,
-        ccp_alpha=0.0,
-        max_samples=None,
-        monotonic_cst=None,
-    ):
-        super().__init__(
-            n_estimators=n_estimators,
-            criterion=criterion,
-            max_depth=max_depth,
-            min_samples_split=min_samples_split,
-            min_samples_leaf=min_samples_leaf,
-            min_weight_fraction_leaf=min_weight_fraction_leaf,
-            max_features=max_features,
-            max_leaf_nodes=max_leaf_nodes,
-            min_impurity_decrease=min_impurity_decrease,
-            bootstrap=bootstrap,
-            oob_score=oob_score,
-            n_jobs=n_jobs,
-            random_state=random_state,
-            verbose=verbose,
-            warm_start=warm_start,
-            class_weight=class_weight,
-            ccp_alpha=ccp_alpha,
-            max_samples=max_samples,
-            monotonic_cst=monotonic_cst,
-        )
+def with_tree_weight_calculator(forest_class, name):
+    """Subclass of the mixin and `forest_class` taking a tree_weight_calculator.
+
+    The constructor signature is copied from the installed scikit-learn, so it
+    follows the forest parameters of each version (e.g. monotonic_cst since 1.4).
+    """
+    parent_init = forest_class.__init__
+    signature = inspect.signature(parent_init)
+
+    def __init__(self, *args, tree_weight_calculator=None, **kwargs):
+        parent_init(self, *args, **kwargs)
         self.tree_weight_calculator = tree_weight_calculator
 
-class AWRfRegressorWithCalculator(AttributeWeightRelatedForestMixin, RandomForestRegressor):
-    def __init__(
-        self,
-        n_estimators=100,
-        *,
-        tree_weight_calculator=None,
-        criterion="squared_error",
-        max_depth=None,
-        min_samples_split=2,
-        min_samples_leaf=1,
-        min_weight_fraction_leaf=0.0,
-        max_features=1.0,
-        max_leaf_nodes=None,
-        min_impurity_decrease=0.0,
-        bootstrap=True,
-        oob_score=False,
-        n_jobs=None,
-        random_state=None,
-        verbose=0,
-        warm_start=False,
-        ccp_alpha=0.0,
-        max_samples=None,
-        monotonic_cst=None,
-    ):
-        super().__init__(
-            n_estimators=n_estimators,
-            criterion=criterion,
-            max_depth=max_depth,
-            min_samples_split=min_samples_split,
-            min_samples_leaf=min_samples_leaf,
-            min_weight_fraction_leaf=min_weight_fraction_leaf,
-            max_features=max_features,
-            max_leaf_nodes=max_leaf_nodes,
-            min_impurity_decrease=min_impurity_decrease,
-            bootstrap=bootstrap,
-            oob_score=oob_score,
-            n_jobs=n_jobs,
-            random_state=random_state,
-            verbose=verbose,
-            warm_start=warm_start,
-            ccp_alpha=ccp_alpha,
-            max_samples=max_samples,
-            monotonic_cst=monotonic_cst,
-        )
-        self.tree_weight_calculator = tree_weight_calculator
+    __init__.__signature__ = signature.replace(
+        parameters=[
+            *signature.parameters.values(),
+            inspect.Parameter(
+                "tree_weight_calculator", inspect.Parameter.KEYWORD_ONLY, default=None
+            ),
+        ]
+    )
+    # Module-level name and qualname keep instances picklable.
+    return type(
+        name,
+        (AttributeWeightRelatedForestMixin, forest_class),
+        {"__init__": __init__, "__module__": __name__, "__qualname__": name},
+    )
+
+AwRFCclassWithCalculator = with_tree_weight_calculator(
+    RandomForestClassifier, "AwRFCclassWithCalculator"
+)
+AWRfRegressorWithCalculator = with_tree_weight_calculator(
+    RandomForestRegressor, "AWRfRegressorWithCalculator"
+)
 
 # Bootstrapping makes sample_weight non-equivalent to repeated samples; sklearn
 # xfails these checks for its own random forests, keyed by exact class only.
@@ -161,7 +103,7 @@ class AttributeWeightRelatedForestMixinTest(unittest.TestCase):
 
         for name, clf in self.get_estimators().items():
             with self.subTest(estimator=name):
-                check_estimator(clf, expected_failed_checks=EXPECTED_FAILED_CHECKS)
+                check_estimator_compat(clf, expected_failed_checks=EXPECTED_FAILED_CHECKS)
 
 
 N_ESTIMATORS = 10

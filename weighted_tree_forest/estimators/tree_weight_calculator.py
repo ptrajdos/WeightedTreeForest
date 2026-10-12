@@ -98,15 +98,15 @@ class _DecisionPathMeanTreeWeightCalculator(TreeWeightCalculator):
         nodes = np.flatnonzero(is_internal)
         node_tree = np.searchsorted(n_nodes_ptr, nodes, side="right") - 1
         shape = (len(features), len(forest.estimators_))
-        value_sum = indicator @ sparse.csr_array(
+        value_sum = indicator @ sparse.csr_matrix(
             (node_values[features[is_internal]], (nodes, node_tree)), shape=shape
         )
-        path_length = indicator @ sparse.csr_array(
+        path_length = indicator @ sparse.csr_matrix(
             (np.ones(len(nodes)), (nodes, node_tree)), shape=shape
         )
 
-        value_sum = sparse.csr_array(value_sum).toarray()
-        path_length = sparse.csr_array(path_length).toarray()
+        value_sum = sparse.csr_matrix(value_sum).toarray()
+        path_length = sparse.csr_matrix(path_length).toarray()
         has_internal_nodes = path_length > 0
         with np.errstate(invalid="ignore"):
             mean = np.where(
