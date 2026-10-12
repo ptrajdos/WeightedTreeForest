@@ -8,7 +8,7 @@ dynamic = ["version", "readme"]
 dependencies = [
     'scikit-learn>=1.2.0',
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 authors = [
   {name = "Pawel Trajdos", email = "pawel.trajdos@pwr.edu.pl"},
 ]
