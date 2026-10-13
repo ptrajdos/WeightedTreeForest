@@ -2,8 +2,8 @@ import inspect
 import warnings
 from unittest import SkipTest
 
+import numpy as np
 from sklearn.exceptions import SkipTestWarning
-from sklearn.utils.estimator_checks import check_estimator
 
 try:  # sklearn >= 1.6
     from sklearn.utils.validation import _check_n_features
@@ -46,22 +46,43 @@ def validate_predict_input_ext(estimator, X):
     return X
 
 
-if "expected_failed_checks" in inspect.signature(check_estimator).parameters:  # sklearn >= 1.6
-    def check_estimator_compat(estimator, expected_failed_checks=None):
+def gradient_boosting_raw_to_proba(estimator, raw_predictions):
+    """Class probabilities from the raw predictions of gradient boosting."""
+    loss = estimator._loss
+    if hasattr(loss, "_raw_prediction_to_proba"):  # sklearn < 1.4
+        return loss._raw_prediction_to_proba(raw_predictions)
+    return loss.predict_proba(raw_predictions)
+
+
+def gradient_boosting_raw_to_decision(estimator, raw_predictions):
+    """Encoded class labels from the raw predictions of gradient boosting."""
+    loss = estimator._loss
+    if hasattr(loss, "_raw_prediction_to_decision"):  # sklearn < 1.4
+        return loss._raw_prediction_to_decision(raw_predictions)
+    if raw_predictions.ndim == 1:
+        return (raw_predictions >= 0).astype(int)
+    return np.argmax(raw_predictions, axis=1)
+
+
+def check_estimator_compat(estimator, expected_failed_checks=None):
+    # Imported here: estimator_checks is heavy and only needed by the tests.
+    from sklearn.utils.estimator_checks import check_estimator
+
+    if "expected_failed_checks" in inspect.signature(check_estimator).parameters:  # sklearn >= 1.6
         check_estimator(estimator, expected_failed_checks=expected_failed_checks)
-else:  # sklearn < 1.6
-    def check_estimator_compat(estimator, expected_failed_checks=None):
-        # expected_failed_checks is not supported; skip those checks instead.
-        expected_failed_checks = expected_failed_checks or {}
-        for est, check in check_estimator(estimator, generate_only=True):
-            check_name = getattr(check, "func", check).__name__
-            if check_name in expected_failed_checks:
-                continue
-            # Like check_estimator: a skipped check must not stop the others.
-            try:
-                check(est)
-            except SkipTest as e:
-                warnings.warn(
-                    f"Skipping {check_name} for {type(est).__name__}: {e}",
-                    SkipTestWarning,
-                )
+        return
+
+    # sklearn < 1.6: expected_failed_checks is not supported; skip those checks instead.
+    expected_failed_checks = expected_failed_checks or {}
+    for est, check in check_estimator(estimator, generate_only=True):
+        check_name = getattr(check, "func", check).__name__
+        if check_name in expected_failed_checks:
+            continue
+        # Like check_estimator: a skipped check must not stop the others.
+        try:
+            check(est)
+        except SkipTest as e:
+            warnings.warn(
+                f"Skipping {check_name} for {type(est).__name__}: {e}",
+                SkipTestWarning,
+            )

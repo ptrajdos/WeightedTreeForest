@@ -1,4 +1,3 @@
-import inspect
 import unittest
 import numpy as np
 from sklearn.datasets import load_diabetes, load_iris
@@ -12,45 +11,19 @@ from weighted_tree_forest.estimators.tree_weight_calculator import (
 
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 
+from tests.estimators.estimator_factory import with_tree_weight_calculator
+
 class AwRFCclass(AttributeWeightRelatedForestMixin, RandomForestClassifier):
     pass
 
 class AWRfRegressor(AttributeWeightRelatedForestMixin, RandomForestRegressor):
     pass
 
-def with_tree_weight_calculator(forest_class, name):
-    """Subclass of the mixin and `forest_class` taking a tree_weight_calculator.
-
-    The constructor signature is copied from the installed scikit-learn, so it
-    follows the forest parameters of each version (e.g. monotonic_cst since 1.4).
-    """
-    parent_init = forest_class.__init__
-    signature = inspect.signature(parent_init)
-
-    def __init__(self, *args, tree_weight_calculator=None, **kwargs):
-        parent_init(self, *args, **kwargs)
-        self.tree_weight_calculator = tree_weight_calculator
-
-    __init__.__signature__ = signature.replace(
-        parameters=[
-            *signature.parameters.values(),
-            inspect.Parameter(
-                "tree_weight_calculator", inspect.Parameter.KEYWORD_ONLY, default=None
-            ),
-        ]
-    )
-    # Module-level name and qualname keep instances picklable.
-    return type(
-        name,
-        (AttributeWeightRelatedForestMixin, forest_class),
-        {"__init__": __init__, "__module__": __name__, "__qualname__": name},
-    )
-
 AwRFCclassWithCalculator = with_tree_weight_calculator(
-    RandomForestClassifier, "AwRFCclassWithCalculator"
+    AttributeWeightRelatedForestMixin, RandomForestClassifier, "AwRFCclassWithCalculator", __name__
 )
 AWRfRegressorWithCalculator = with_tree_weight_calculator(
-    RandomForestRegressor, "AWRfRegressorWithCalculator"
+    AttributeWeightRelatedForestMixin, RandomForestRegressor, "AWRfRegressorWithCalculator", __name__
 )
 
 # Bootstrapping makes sample_weight non-equivalent to repeated samples; sklearn

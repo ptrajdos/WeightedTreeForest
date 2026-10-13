@@ -3,10 +3,7 @@ from sklearn.base import is_classifier
 from sklearn.utils.metaestimators import available_if
 from sklearn.utils.validation import check_is_fitted
 
-from weighted_tree_forest.estimators.tree_weight_calculator import (
-    TreeWeightCalculator,
-    UniformTreeWeightCalculator,
-)
+from weighted_tree_forest.estimators.tree_weighting_mixin import TreeWeightingMixin
 
 def _parent_has_method(method_name):
     """Check if the parent class has the method."""
@@ -15,26 +12,7 @@ def _parent_has_method(method_name):
         return attr is not None
     return check
 
-class AttributeWeightRelatedForestMixin:
-    # Object calculating tree weights from attribute weights. Concrete
-    # estimators may override it as a class attribute or expose it as an
-    # ``__init__`` parameter. ``None`` means UniformTreeWeightCalculator.
-    tree_weight_calculator = None
-
-    def _get_tree_weight_calculator(self):
-        calculator = self.tree_weight_calculator
-        if calculator is None:
-            return UniformTreeWeightCalculator()
-        if not isinstance(calculator, TreeWeightCalculator):
-            raise TypeError(
-                "tree_weight_calculator must be a TreeWeightCalculator, "
-                f"got {type(calculator).__name__}."
-            )
-        return calculator
-
-    def _compute_tree_weights(self, X, attribute_weights):
-        check_is_fitted(self)
-        return self._get_tree_weight_calculator()(self, X, attribute_weights)
+class AttributeWeightRelatedForestMixin(TreeWeightingMixin):
 
     def _weighted_tree_sum(self, tree_outputs, tree_weights):
         """Sum per-tree outputs, each of shape (n_samples, ...), weighted by tree."""
