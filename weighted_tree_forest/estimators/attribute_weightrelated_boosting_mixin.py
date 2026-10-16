@@ -98,8 +98,12 @@ class AttributeWeightRelatedBoostingMixin(TreeWeightingMixin):
         check_is_fitted(self)
         X = self._check_X(X)
         estimator_weights = self._adaboost_estimator_weights(X, weights)
+        # The median ignores a common scale of the weights, so samples whose
+        # trees all have weight 0 keep the unweighted median.
+        unweighted = estimator_weights.sum(axis=1) == 0
+        estimator_weights[unweighted] = self.estimator_weights_[: len(self.estimators_)]
 
-        predictions = np.array([estimator.predict(X) for estimator in self.estimators_]).T
+        predictions =np.array([estimator.predict(X) for estimator in self.estimators_]).T
         sorted_idx = np.argsort(predictions, axis=1)
         weight_cdf = np.cumsum(
             np.take_along_axis(estimator_weights, sorted_idx, axis=1), axis=1

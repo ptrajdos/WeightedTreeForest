@@ -1,7 +1,7 @@
 import unittest
 import numpy as np
 from scipy.special import expit, softmax
-from sklearn.datasets import load_breast_cancer, load_diabetes, load_iris
+from sklearn.datasets import load_breast_cancer, load_diabetes, load_iris, make_friedman1
 from sklearn.ensemble import (
     AdaBoostClassifier,
     AdaBoostRegressor,
@@ -9,6 +9,8 @@ from sklearn.ensemble import (
     GradientBoostingRegressor,
     HistGradientBoostingRegressor,
 )
+from sklearn.metrics import r2_score
+from sklearn.model_selection import train_test_split
 from weighted_tree_forest.compat.sklearn_compat import check_estimator_compat
 from weighted_tree_forest.estimators.attribute_weightrelated_boosting_mixin import (
     AttributeWeightRelatedBoostingMixin,
@@ -197,6 +199,63 @@ class WeightedBoostingPredictionTest(unittest.TestCase):
                     # of size 1 in binary classification.
                     expected = staged[stages - 1, np.arange(len(X))].reshape(actual.shape)
                     self.assert_outputs_equal(actual, expected)
+
+    def test_regression_predictions_are_informative(self):
+        # Held-out R^2 of predictions unrelated to the target is at most about
+        # 0; weighted predictions must stay well above it.
+        X, y = make_friedman1(n_samples=600, random_state=0)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=0)
+        rng = np.random.default_rng(42)
+        for estimator_class in (AwGBRegressorWithCalculator, AwAdaBoostRegressorWithCalculator):
+            for calculator_name, calculator_class in CALCULATORS.items():
+                estimator = estimator_class(
+                    n_estimators=50, random_state=0, tree_weight_calculator=calculator_class()
+                ).fit(X_train, y_train)
+                cases = {
+                    "ones": np.ones(X.shape[1]),
+                    **{f"random_{i}": rng.uniform(0.1, 1.0, X.shape[1]) for i in range(3)},
+                }
+                # With every tree weight 0 gradient boosting predicts its init
+                # estimator (the training mean, R^2 about 0) by design.
+                if estimator_class is AwAdaBoostRegressorWithCalculator:
+                    cases["zeros"] = np.zeros(X.shape[1])
+                for case, attribute_weights in cases.items():
+                    with self.subTest(
+                        estimator=estimator_class.__name__, calculator=calculator_name, case=case
+                    ):
+                        r2 = r2_score(y_test, estimator.predict(X_test, weights=attribute_weights))
+                        self.assertGreater(r2, 0.3)
+
+    def test_adaboost_regressor_zero_tree_weights_keep_unweighted_median(self):
+        X, y = load_diabetes(return_X_y=True)
+        estimator = self.fit(X, y, AwAdaBoostRegressorWithCalculator, None)
+        estimator.tree_weight_calculator = FixedTreeWeightCalculator(
+            np.zeros((len(X), n_stages(estimator)))
+        )
+        np.testing.assert_array_equal(
+            estimator.predict(X, weights=np.ones(X.shape[1])), estimator.predict(X)
+        )
+
+    def test_predict_proba_is_probability_distribution(self):
+        # Zero attribute weights give every tree weight 0 under the decision
+        # path calculators, so the all-zero case is covered too.
+        rng = np.random.default_rng(42)
+        for calculator_name, calculator_class in CALCULATORS.items():
+            for name, (X, y, estimator_class) in get_datasets().items():
+                estimator = self.fit(X, y, estimator_class, calculator_class())
+                if not hasattr(estimator, "predict_proba"):
+                    continue
+                attribute_weights = {
+                    "ones": np.ones(X.shape[1]),
+                    "zeros": np.zeros(X.shape[1]),
+                    "random": rng.uniform(0.0, 1.0, X.shape[1]),
+                }
+                for case, weights in attribute_weights.items():
+                    with self.subTest(calculator=calculator_name, dataset=name, case=case):
+                        proba = estimator.predict_proba(X, weights=weights)
+                        self.assertEqual(proba.shape, (len(X), len(estimator.classes_)))
+                        self.assertTrue(np.all((proba >= 0) & (proba <= 1)))
+                        np.testing.assert_allclose(proba.sum(axis=1), 1.0)
 
     def random_attribute_weights(self, rng, n_features):
         for repetition in range(3):

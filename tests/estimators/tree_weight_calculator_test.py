@@ -109,7 +109,7 @@ class DecisionPathTreeWeightCalculatorTest(unittest.TestCase):
 
 class DecisionPathWeightedPredictionTest(unittest.TestCase):
 
-    def test_predictions_are_weighted_sums_of_tree_outputs(self):
+    def test_predictions_are_weighted_means_of_tree_outputs(self):
         rng = np.random.default_rng(42)
         datasets = {
             "classification": (*load_iris(return_X_y=True), AwRFCclassWithCalculator),
@@ -131,7 +131,7 @@ class DecisionPathWeightedPredictionTest(unittest.TestCase):
                     expected_proba = sum(
                         tree_weights[:, [t]] * tree.predict_proba(X32)
                         for t, tree in enumerate(estimator.estimators_)
-                    )
+                    ) / tree_weights.sum(axis=1, keepdims=True)
                     np.testing.assert_allclose(
                         estimator.predict_proba(X, weights=attribute_weights), expected_proba
                     )
@@ -143,7 +143,7 @@ class DecisionPathWeightedPredictionTest(unittest.TestCase):
                     expected = sum(
                         tree_weights[:, t] * tree.predict(X32)
                         for t, tree in enumerate(estimator.estimators_)
-                    )
+                    ) / tree_weights.sum(axis=1)
                     np.testing.assert_allclose(
                         estimator.predict(X, weights=attribute_weights), expected
                     )

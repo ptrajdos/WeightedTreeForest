@@ -14,14 +14,19 @@ def _parent_has_method(method_name):
 
 class AttributeWeightRelatedForestMixin(TreeWeightingMixin):
 
-    def _weighted_tree_sum(self, tree_outputs, tree_weights):
-        """Sum per-tree outputs, each of shape (n_samples, ...), weighted by tree."""
+    def _weighted_tree_mean(self, tree_outputs, tree_weights, fallback):
+        """Mean of per-tree outputs, each of shape (n_samples, ...), weighted by tree.
+
+        Samples whose trees all have weight 0 get ``fallback``.
+        """
         result = None
         for tree_output, weight in zip(tree_outputs, tree_weights.T):
             weight = weight.reshape((-1,) + (1,) * (tree_output.ndim - 1))
             contribution = weight * tree_output
             result = contribution if result is None else result + contribution
-        return result
+        total = tree_weights.sum(axis=1).reshape((-1,) + (1,) * (result.ndim - 1))
+        with np.errstate(divide="ignore", invalid="ignore"):
+            return np.where(total > 0, result / total, fallback)
 
     def _predict(self, X, weights=None, **params):
         if weights is None:
@@ -31,9 +36,10 @@ class AttributeWeightRelatedForestMixin(TreeWeightingMixin):
             check_is_fitted(self)
             X = self._validate_X_predict(X)
             tree_weights = self._compute_tree_weights(X, weights)
-            return self._weighted_tree_sum(
-                (tree.predict(X, check_input=False) for tree in self.estimators_),
-                tree_weights,
+            tree_predictions = [tree.predict(X, check_input=False) for tree in self.estimators_]
+            # Without weighted trees, fall back to the unweighted forest mean.
+            return self._weighted_tree_mean(
+                tree_predictions, tree_weights, np.mean(tree_predictions, axis=0)
             )
 
         # Weighted soft voting, as in the unweighted random forest classifier.
@@ -54,10 +60,20 @@ class AttributeWeightRelatedForestMixin(TreeWeightingMixin):
         X = self._validate_X_predict(X)
         tree_weights = self._compute_tree_weights(X, weights)
         tree_probas = [tree.predict_proba(X, check_input=False) for tree in self.estimators_]
+        # Without weighted trees, fall back to uniform class probabilities.
+        # Clipping removes rounding errors such as 1 + 2e-16.
         if self.n_outputs_ == 1:
-            return self._weighted_tree_sum(tree_probas, tree_weights)
+            return np.clip(
+                self._weighted_tree_mean(tree_probas, tree_weights, 1 / self.n_classes_), 0, 1
+            )
         return [
-            self._weighted_tree_sum((proba[k] for proba in tree_probas), tree_weights)
+            np.clip(
+                self._weighted_tree_mean(
+                    [proba[k] for proba in tree_probas], tree_weights, 1 / self.n_classes_[k]
+                ),
+                0,
+                1,
+            )
             for k in range(self.n_outputs_)
         ]
 
